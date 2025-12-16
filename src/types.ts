@@ -5,7 +5,7 @@ export interface QuizQuestion {
   answer: string | string[];
   options?: string[];
   imageUrl?: string;
-  hint?: string;
+  hints?: string[]; // Array of hints that can be purchased one by one
   people?: Array<{
     id: string;
     name: string;

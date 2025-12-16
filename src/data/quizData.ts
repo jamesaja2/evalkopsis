@@ -7,49 +7,65 @@ const captchaQuestions: QuizQuestion[] = [
     question: 'Siapa nama anak bu Siska?',
     type: 'text',
     answer: ['angel'],
-    hint: 'Inisial A → Namanya 5 Huruf → Namanya sama seperti OSIS INTI dan KOPSIS',
+    hints: [
+      'Inisial A',
+      'Namanya 5 Huruf',
+      'Namanya sama seperti OSIS INTI dan KOPSIS'
+    ],
   },
   {
     id: 'q2',
     question: 'Nama besar Valentine 3 tahun lalu?',
     type: 'text',
     answer: ['eternity'],
-    hint: 'Waktu yang tak terbatas atau keadaan yang abadi, tanpa awal dan akhir',
+    hints: [
+      'Waktu yang tak terbatas atau keadaan yang abadi, tanpa awal dan akhir'
+    ],
   },
   {
     id: 'q3',
     question: 'Siapa Kadep 2 tahun lalu?',
     type: 'text',
     answer: ['mecas'],
-    hint: 'TIDAK ADA HINT -1 MENIT',
+    hints: [
+      'TIDAK ADA HINT -1 MENIT'
+    ],
   },
   {
     id: 'q4',
     question: 'Apa jabatan yang dimiliki Warren tahun lalu?',
     type: 'text',
     answer: ['bendahara'],
-    hint: 'TIDAK ADA HINT -1 MENIT',
+    hints: [
+      'TIDAK ADA HINT -1 MENIT'
+    ],
   },
   {
     id: 'q5',
     question: 'Harga bolpoin Kokoro di Kopsis?',
     type: 'text',
     answer: ['8 ribu', '8ribu', '8000', '8'],
-    hint: 'TIDAK ADA HINT -1 MENIT',
+    hints: [
+      'TIDAK ADA HINT -1 MENIT'
+    ],
   },
   {
     id: 'q6',
     question: 'Apa nama proker yang baru dibuat tahun lalu bersamaan dengan Valentine?',
     type: 'text',
     answer: ['board games', 'boardgames'],
-    hint: 'UNO',
+    hints: [
+      'UNO'
+    ],
   },
   {
     id: 'q7',
     question: 'Siapa pemeran utama di video promosi organisasi Kopsis tahun ini?',
     type: 'text',
     answer: ['marc'],
-    hint: 'Timothy Ronald → Model',
+    hints: [
+      'Timothy Ronald → Model'
+    ],
   },
 ];
 

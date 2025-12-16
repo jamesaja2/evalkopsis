@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, ArrowRight, Lock, Clock, Lightbulb, AlertTriangl
 import { QuizQuestion } from '../types';
 import { validateAnswer } from '../utils/validation';
 import HintModal from './HintModal';
+import TabSwitchBlocker from './TabSwitchBlocker';
 import { getAttempts, incrementAttempts } from '../utils/storage';
 
 interface QuizProps {
@@ -23,12 +24,12 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
   const [isTimeUp, setIsTimeUp] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Hint states
+  // Hint states - track purchased hints per question
   const [showHintModal, setShowHintModal] = useState(false);
-  const [hintUsed, setHintUsed] = useState<Set<string>>(new Set());
+  const [purchasedHints, setPurchasedHints] = useState<Record<string, number>>({});
   
-  // Tab visibility warning
-  const [showTabWarning, setShowTabWarning] = useState(false);
+  // Tab visibility blocker
+  const [showTabBlocker, setShowTabBlocker] = useState(false);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   
   // Attempts tracking
@@ -94,13 +95,12 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
     };
   }, [timeRemaining]);
 
-  // Detect tab change
+  // Detect tab change - show full screen blocker
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setTabSwitchCount(prev => prev + 1);
-        setShowTabWarning(true);
-        setTimeout(() => setShowTabWarning(false), 3000);
+        setShowTabBlocker(true);
       }
     };
 
@@ -119,20 +119,28 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
   };
 
   const handleHintRequest = () => {
-    if (currentQuestion.hint && !hintUsed.has(currentQuestion.id)) {
+    if (currentQuestion.hints && currentQuestion.hints.length > 0) {
       setShowHintModal(true);
     }
   };
 
   const handleHintConfirm = () => {
-    setShowHintModal(false);
-    setHintUsed(prev => new Set(prev).add(currentQuestion.id));
+    // Purchase next hint for current question
+    const currentPurchased = purchasedHints[currentQuestion.id] || 0;
+    setPurchasedHints(prev => ({
+      ...prev,
+      [currentQuestion.id]: currentPurchased + 1
+    }));
     // Reduce time by 60 seconds (1 minute)
     setTimeRemaining(prev => Math.max(0, prev - 60));
   };
 
   const handleHintCancel = () => {
     setShowHintModal(false);
+  };
+
+  const handleReturnToQuiz = () => {
+    setShowTabBlocker(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -193,8 +201,9 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
     setShake(false);
     setTimeRemaining(360);
     setIsTimeUp(false);
-    setHintUsed(new Set());
+    setPurchasedHints({});
     setTabSwitchCount(0);
+    setShowTabBlocker(false);
   };
 
   // Max attempts modal
@@ -248,25 +257,25 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
     );
   }
 
+  const currentPurchasedCount = purchasedHints[currentQuestion.id] || 0;
+  const hasHints = currentQuestion.hints && currentQuestion.hints.length > 0;
+  const hasAvailableHints = hasHints && currentPurchasedCount < currentQuestion.hints.length;
+  const hasPurchasedHints = currentPurchasedCount > 0;
+
   return (
     <>
+      <TabSwitchBlocker
+        isVisible={showTabBlocker}
+        onReturn={handleReturnToQuiz}
+      />
+
       <HintModal
         isOpen={showHintModal}
         onConfirm={handleHintConfirm}
         onCancel={handleHintCancel}
-        hint={currentQuestion.hint || ''}
+        hints={currentQuestion.hints || []}
+        purchasedCount={currentPurchasedCount}
       />
-
-      {/* Tab Switch Warning */}
-      {showTabWarning && (
-        <div className="fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 animate-slideDown">
-          <AlertTriangle className="w-6 h-6" />
-          <div>
-            <p className="font-bold">Peringatan!</p>
-            <p className="text-sm">Jangan pindah tab! ({tabSwitchCount}x)</p>
-          </div>
-        </div>
-      )}
 
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="w-full max-w-4xl">
@@ -312,19 +321,29 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
               </h2>
               
               {/* Hint Button */}
-              {currentQuestion.hint && (
+              {hasHints && (
                 <button
                   onClick={handleHintRequest}
-                  disabled={hintUsed.has(currentQuestion.id)}
                   className={`ml-4 flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
-                    hintUsed.has(currentQuestion.id)
-                      ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                    hasPurchasedHints && !hasAvailableHints
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : hasPurchasedHints
+                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30'
                       : 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
                   }`}
-                  title={hintUsed.has(currentQuestion.id) ? 'Hint sudah digunakan' : 'Gunakan hint (-1 menit)'}
+                  title={
+                    hasPurchasedHints && !hasAvailableHints
+                      ? 'Lihat hint yang sudah dibeli'
+                      : hasPurchasedHints
+                      ? `${currentPurchasedCount} hint dibeli - Klik untuk lihat/beli lagi`
+                      : 'Beli hint (-1 menit per hint)'
+                  }
                 >
                   <Lightbulb className="w-5 h-5" />
-                  {hintUsed.has(currentQuestion.id) ? 'Terpakai' : 'Hint'}
+                  {hasPurchasedHints 
+                    ? `Hint (${currentPurchasedCount}/${currentQuestion.hints.length})`
+                    : 'Hint'
+                  }
                 </button>
               )}
             </div>

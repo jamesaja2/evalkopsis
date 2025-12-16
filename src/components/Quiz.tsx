@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { CheckCircle2, XCircle, ArrowRight, Lock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, XCircle, ArrowRight, Lock, Clock, Lightbulb, AlertTriangle } from 'lucide-react';
 import { QuizQuestion } from '../types';
 import { validateAnswer } from '../utils/validation';
+import HintModal from './HintModal';
 
 interface QuizProps {
   questions: QuizQuestion[];
@@ -15,12 +16,117 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [shake, setShake] = useState(false);
+  
+  // Timer states
+  const [timeRemaining, setTimeRemaining] = useState(360); // 6 minutes = 360 seconds
+  const [isTimeUp, setIsTimeUp] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Hint states
+  const [showHintModal, setShowHintModal] = useState(false);
+  const [hintUsed, setHintUsed] = useState<Set<string>>(new Set());
+  
+  // Tab visibility warning
+  const [showTabWarning, setShowTabWarning] = useState(false);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
 
   const currentQuestion = questions[currentIndex];
   const progress = ((currentIndex + 1) / questions.length) * 100;
 
+  // Enter fullscreen on mount
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {
+        console.log('Fullscreen request failed:', err);
+      }
+    };
+    
+    enterFullscreen();
+
+    // Cleanup on unmount
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  // Timer effect
+  useEffect(() => {
+    if (timeRemaining <= 0) {
+      setIsTimeUp(true);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          setIsTimeUp(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [timeRemaining]);
+
+  // Detect tab change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setTabSwitchCount(prev => prev + 1);
+        setShowTabWarning(true);
+        setTimeout(() => setShowTabWarning(false), 3000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Format time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleHintRequest = () => {
+    if (currentQuestion.hint && !hintUsed.has(currentQuestion.id)) {
+      setShowHintModal(true);
+    }
+  };
+
+  const handleHintConfirm = () => {
+    setShowHintModal(false);
+    setHintUsed(prev => new Set(prev).add(currentQuestion.id));
+    // Reduce time by 60 seconds (1 minute)
+    setTimeRemaining(prev => Math.max(0, prev - 60));
+  };
+
+  const handleHintCancel = () => {
+    setShowHintModal(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isTimeUp) return;
 
     let isCorrect = false;
     
@@ -41,6 +147,10 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
           setSelectedPerson(null);
           setFeedback(null);
         } else {
+          // Stop timer on completion
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+          }
           onComplete();
         }
       }, 1500);
@@ -54,35 +164,109 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
-        {/* Header dengan progress */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Lock className="w-5 h-5 text-blue-400" />
-              <span className="text-sm font-semibold text-blue-400">
-                Verifikasi Kopsis
-              </span>
-            </div>
-            <span className="text-sm font-medium text-slate-300">
-              {currentIndex + 1} / {questions.length}
-            </span>
+  // Time up screen
+  if (isTimeUp) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Clock className="w-10 h-10 text-red-400" />
           </div>
-          <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-blue-400 h-3 rounded-full transition-all duration-500 shadow-lg shadow-blue-500/30"
-              style={{ width: `${progress}%` }}
-            />
+          <h2 className="text-3xl font-bold text-white mb-4">Waktu Habis!</h2>
+          <p className="text-slate-300 mb-8">
+            Maaf, waktu kamu sudah habis. Kamu hanya berhasil menyelesaikan {currentIndex} dari {questions.length} pertanyaan.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <HintModal
+        isOpen={showHintModal}
+        onConfirm={handleHintConfirm}
+        onCancel={handleHintCancel}
+        hint={currentQuestion.hint || ''}
+      />
+
+      {/* Tab Switch Warning */}
+      {showTabWarning && (
+        <div className="fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 animate-slideDown">
+          <AlertTriangle className="w-6 h-6" />
+          <div>
+            <p className="font-bold">Peringatan!</p>
+            <p className="text-sm">Jangan pindah tab! ({tabSwitchCount}x)</p>
           </div>
         </div>
+      )}
 
-        {/* Main Card */}
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl p-8 border border-slate-700">
-          <h2 className="text-3xl font-bold text-white mb-8 leading-snug">
-            {currentQuestion.question}
-          </h2>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-4xl">
+          {/* Header dengan Timer dan progress */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-blue-400" />
+                <span className="text-sm font-semibold text-blue-400">
+                  Verifikasi Kopsis
+                </span>
+              </div>
+              
+              {/* Timer */}
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono font-bold text-lg ${
+                timeRemaining <= 60 
+                  ? 'bg-red-500/20 text-red-400 animate-pulse' 
+                  : timeRemaining <= 180
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : 'bg-blue-500/20 text-blue-400'
+              }`}>
+                <Clock className="w-5 h-5" />
+                {formatTime(timeRemaining)}
+              </div>
+
+              <span className="text-sm font-medium text-slate-300">
+                {currentIndex + 1} / {questions.length}
+              </span>
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-blue-400 h-3 rounded-full transition-all duration-500 shadow-lg shadow-blue-500/30"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Main Card */}
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl p-8 border border-slate-700">
+            <div className="flex items-start justify-between mb-8">
+              <h2 className="text-3xl font-bold text-white leading-snug flex-1">
+                {currentQuestion.question}
+              </h2>
+              
+              {/* Hint Button */}
+              {currentQuestion.hint && (
+                <button
+                  onClick={handleHintRequest}
+                  disabled={hintUsed.has(currentQuestion.id)}
+                  className={`ml-4 flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+                    hintUsed.has(currentQuestion.id)
+                      ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                      : 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30'
+                  }`}
+                  title={hintUsed.has(currentQuestion.id) ? 'Hint sudah digunakan' : 'Gunakan hint (-1 menit)'}
+                >
+                  <Lightbulb className="w-5 h-5" />
+                  {hintUsed.has(currentQuestion.id) ? 'Terpakai' : 'Hint'}
+                </button>
+              )}
+            </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {currentQuestion.type === 'text' ? (
@@ -217,10 +401,24 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
           25% { transform: translateX(-10px); }
           75% { transform: translateX(10px); }
         }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
         .animate-shake {
           animation: shake 0.3s ease-in-out;
         }
+        .animate-slideDown {
+          animation: slideDown 0.3s ease-out;
+        }
       `}</style>
-    </div>
+      </div>
+    </>
   );
 }

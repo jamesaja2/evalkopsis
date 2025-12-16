@@ -5,6 +5,7 @@ export interface QuizQuestion {
   answer: string | string[];
   options?: string[];
   imageUrl?: string;
+  hint?: string;
   people?: Array<{
     id: string;
     name: string;

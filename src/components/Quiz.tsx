@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, XCircle, ArrowRight, Lock, Clock, Lightbulb, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, XCircle, ArrowRight, Lock, Clock, Lightbulb, AlertTriangle, RotateCcw } from 'lucide-react';
 import { QuizQuestion } from '../types';
 import { validateAnswer } from '../utils/validation';
 import HintModal from './HintModal';
+import { getAttempts, incrementAttempts } from '../utils/storage';
 
 interface QuizProps {
   questions: QuizQuestion[];
@@ -29,6 +30,10 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
   // Tab visibility warning
   const [showTabWarning, setShowTabWarning] = useState(false);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  
+  // Attempts tracking
+  const [attempts, setAttempts] = useState(() => getAttempts(groupId));
+  const [showMaxAttemptsModal, setShowMaxAttemptsModal] = useState(false);
 
   const currentQuestion = questions[currentIndex];
   const progress = ((currentIndex + 1) / questions.length) * 100;
@@ -54,6 +59,13 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
       }
     };
   }, []);
+
+  // Check max attempts on mount
+  useEffect(() => {
+    if (attempts >= 3) {
+      setShowMaxAttemptsModal(true);
+    }
+  }, [attempts]);
 
   // Timer effect
   useEffect(() => {
@@ -164,8 +176,51 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
     }
   };
 
+  const handleRestartQuiz = () => {
+    const newAttempts = incrementAttempts(groupId);
+    setAttempts(newAttempts);
+    
+    if (newAttempts >= 3) {
+      setShowMaxAttemptsModal(true);
+      return;
+    }
+    
+    // Reset quiz state
+    setCurrentIndex(0);
+    setAnswer('');
+    setSelectedPerson(null);
+    setFeedback(null);
+    setShake(false);
+    setTimeRemaining(360);
+    setIsTimeUp(false);
+    setHintUsed(new Set());
+    setTabSwitchCount(0);
+  };
+
+  // Max attempts modal
+  if (showMaxAttemptsModal) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircle className="w-10 h-10 text-red-400" />
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-4">Batas Percobaan Tercapai</h2>
+          <p className="text-slate-300 mb-4">
+            Tim <span className="font-bold text-blue-400">{groupId}</span> sudah mencoba sebanyak <span className="font-bold">3 kali</span>.
+          </p>
+          <p className="text-slate-400 text-sm">
+            Hubungi panitia untuk mendapatkan akses kembali.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Time up screen
   if (isTimeUp) {
+    const canRetry = attempts < 3;
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -173,15 +228,21 @@ export default function Quiz({ questions, groupId, onComplete }: QuizProps) {
             <Clock className="w-10 h-10 text-red-400" />
           </div>
           <h2 className="text-3xl font-bold text-white mb-4">Waktu Habis!</h2>
-          <p className="text-slate-300 mb-8">
+          <p className="text-slate-300 mb-4">
             Maaf, waktu kamu sudah habis. Kamu hanya berhasil menyelesaikan {currentIndex} dari {questions.length} pertanyaan.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors"
-          >
-            Coba Lagi
-          </button>
+          <p className="text-slate-400 text-sm mb-8">
+            Percobaan: <span className="font-bold text-yellow-400">{attempts} / 3</span>
+          </p>
+          {canRetry && (
+            <button
+              onClick={handleRestartQuiz}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 mx-auto shadow-lg shadow-blue-500/30"
+            >
+              <RotateCcw className="w-5 h-5" />
+              Coba Lagi
+            </button>
+          )}
         </div>
       </div>
     );
